@@ -16,6 +16,7 @@ depends: [
   "lwt_ppx"
   "logs"
   "ppx_deriving"
+  "ppx_jane"
   "odoc" {with-doc}
 ]
 build: [

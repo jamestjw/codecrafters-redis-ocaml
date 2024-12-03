@@ -1,3 +1,4 @@
+open Core
 open Lwt
 
 let num_args_regex = Str.regexp {|\*\([0-9]+\)|}
@@ -10,7 +11,7 @@ type 'a parse_result =
 
 let lower_fst = function
   | [] -> []
-  | x :: xs -> String.lowercase_ascii x :: xs
+  | x :: xs -> String.lowercase x :: xs
 ;;
 
 let parse_set_cmd = function
@@ -19,13 +20,13 @@ let parse_set_cmd = function
       match lower_fst args with
       | [] -> Cmd.SET { set_key; set_value; set_timeout }
       | "px" :: timeout :: rest ->
-        (match int_of_string_opt timeout, set_timeout with
+        (match Stdlib.int_of_string_opt timeout, set_timeout with
          | _, Some _ -> Cmd.INVALID "timeout set twice for 'SET' command"
          | Some timeout, None when timeout > 0 ->
            helper rest (set_key, set_value, Some (Cmd.PX timeout))
          | _ -> Cmd.INVALID "'SET' requires positive integer for timeout")
       | "ex" :: timeout :: rest ->
-        (match int_of_string_opt timeout, set_timeout with
+        (match Stdlib.int_of_string_opt timeout, set_timeout with
          | _, Some _ -> Cmd.INVALID "timeout set twice for 'SET' command"
          | Some timeout, None when timeout > 0 ->
            helper rest (set_key, set_value, Some (Cmd.EX timeout))
@@ -78,7 +79,7 @@ let rec get_cmd ic =
     | None -> return Disconnected
     | Some msg ->
       if Str.string_match regexp msg 0
-      then return @@ Parsed (int_of_string @@ Str.matched_group 1 msg)
+      then return @@ Parsed (Stdlib.int_of_string @@ Str.matched_group 1 msg)
       else return @@ InvalidFormat msg
   in
   let parse_args num_args =
@@ -119,3 +120,57 @@ let rec get_cmd ic =
      | InvalidFormat s -> return @@ Some (Cmd.INVALID s)
      | Parsed arg_list -> return @@ Some (args_to_cmd arg_list))
 ;;
+
+let hex_str_to_int_opt s = Stdlib.int_of_string_opt (Printf.sprintf "0x%s" s)
+
+let ascii_hex_to_str l =
+  let opts = List.map ~f:hex_str_to_int_opt l in
+  if List.exists ~f:Option.is_none opts
+  then None
+  else (
+    let str =
+      List.filter_opt opts
+      |> List.map ~f:(fun e -> Stdlib.Option.get (Char.of_int e))
+      |> String.of_list
+    in
+    Some str)
+;;
+
+(* RDB file *)
+
+type header = { rdb_version : int }
+
+let parse_length_prefixed_string data =
+  match data with
+  | [] -> Error "malformed length prefixed string"
+  | len_str :: rest ->
+    (match hex_str_to_int_opt len_str with
+     | None -> Error "invalid byte"
+     | Some len when List.length rest <> len -> Error "bytes do not match prefix length"
+     | Some _ -> Result.of_option ~error:"invalid byte in string" (ascii_hex_to_str rest))
+;;
+
+let parse_header lines =
+  let open Result.Let_syntax in
+  match lines with
+  | [] -> Error "missing header"
+  | line :: rest ->
+    let%bind magic =
+      Result.of_option ~error:"malformed magic" (List.slice line 0 5 |> ascii_hex_to_str)
+    in
+    let%bind version_num_str =
+      Result.of_option
+        ~error:"malformed version number"
+        (List.slice line 5 9 |> ascii_hex_to_str)
+    in
+    let%bind version_num =
+      Result.of_option
+        ~error:"invalid version number"
+        (Stdlib.int_of_string_opt version_num_str)
+    in
+    (match magic with
+     | "REDIS" -> Ok ({ rdb_version = version_num }, rest)
+     | _ -> Error "invalid magic string")
+;;
+
+let parse_rdb str = failwith "todo"
