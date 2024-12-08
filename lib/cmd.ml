@@ -13,5 +13,6 @@ type t =
       ; set_timeout : set_timeout option
       }
   | GET_CONFIG of string list
+  | KEYS of string
   | INVALID of string
 [@@deriving show { with_path = false }]

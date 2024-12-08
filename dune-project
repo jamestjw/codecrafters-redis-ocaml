@@ -15,6 +15,15 @@
  (license "MIT")
  (allow_empty true)
  (version 0.1)
- (depends base core_unix fmt lwt lwt_ppx logs ppx_deriving))
+ (depends base
+          core_unix
+          fmt
+          lwt
+          lwt_ppx
+          logs
+          ppx_deriving
+          ppx_jane
+          re
+          conf-linux-libc-dev))
 
 (cram enable)
