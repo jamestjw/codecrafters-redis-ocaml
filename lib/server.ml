@@ -65,6 +65,9 @@ let handle_message cmd ({ replication; _ } as state) =
   (* TODO: actually do something with these two *)
   | Cmd.REPL_CONF_PORT _ -> Response.SIMPLE "OK", state
   | Cmd.REPL_CONF_CAPA _ -> Response.SIMPLE "OK", state
+  (* TODO: complete this *)
+  | Cmd.PSYNC _ ->
+    Response.SIMPLE (Printf.sprintf "FULLRESYNC %s 0" replication.replication_id), state
   | Cmd.INVALID s -> Response.ERR s, state
 ;;
 

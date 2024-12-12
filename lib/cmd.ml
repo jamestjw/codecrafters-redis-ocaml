@@ -17,5 +17,6 @@ type t =
   | INFO of string list
   | REPL_CONF_PORT of int
   | REPL_CONF_CAPA of string (* replication capabilities *)
+  | PSYNC of string * int
   | INVALID of string
 [@@deriving show { with_path = false }]

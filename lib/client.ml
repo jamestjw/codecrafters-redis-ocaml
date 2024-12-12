@@ -27,6 +27,7 @@ let cmd_to_str cmd =
     | Cmd.REPL_CONF_PORT port ->
       list_to_bulk [ "REPLCONF"; "listening-port"; string_of_int port ]
     | Cmd.REPL_CONF_CAPA capabilities -> list_to_bulk [ "REPLCONF"; "capa"; capabilities ]
+    | Cmd.PSYNC (id, offset) -> list_to_bulk [ "PSYNC"; id; string_of_int offset ]
     | _ -> failwith "not implemented yet"
   in
   Response.(serialize @@ ARRAY args)
@@ -69,9 +70,24 @@ let send_replication_config (ic, oc) port =
   | Parsed msg ->
     return
     @@ Error (Printf.sprintf "invalid response, expected 'PONG' but got %s instead" msg)
-  | Disconnected -> return @@ Error (Printf.sprintf "no response from server")
+  | Disconnected -> return @@ Error (Printf.sprintf "No response from server to REPLCONF")
   | InvalidFormat s ->
     return @@ Error (Printf.sprintf "invalid response to REPLCONF listening-port: %s" s)
+;;
+
+let initiate_replication_stream (ic, oc) =
+  let psync_response_regex = Str.regexp {|^FULLRESYNC \(.*\) \([0-9]+\)$|} in
+  let%lwt _ = Logs_lwt.info (fun m -> m "Initiating replication stream") in
+  let%lwt () = send_request oc @@ Cmd.PSYNC ("?", -1) in
+  match%lwt Parser.parse_simple ic with
+  | Parsed res when Str.string_match psync_response_regex res 0 ->
+    (* TODO: actually do something with this *)
+    return @@ Ok ()
+  | Parsed s -> return @@ Error (Printf.sprintf "invalid response to PSYNC: %s" s)
+  | Disconnected ->
+    return
+    @@ Error (Printf.sprintf "No response from server to replication stream initiation")
+  | InvalidFormat s -> return @@ Error (Printf.sprintf "invalid response to PSYNC: %s" s)
 ;;
 
 let close_connection sock = Lwt_unix.close sock
